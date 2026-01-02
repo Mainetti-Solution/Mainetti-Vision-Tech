@@ -24,6 +24,33 @@
         .controls { width: 100%; max-width: 500px; margin-bottom: 20px; }
         select { width: 100%; padding: 15px; background-color: #333; color: white; border: 2px solid #444; border-radius: 8px; font-size: 1.1rem; outline: none; cursor: pointer; }
         body.mode-drone select:focus { border-color: var(--drone-color); } body.mode-flir select:focus { border-color: var(--flir-color); }
+        
+        /* NUOVI STILI PER IL CALCOLATORE */
+        .dew-calculator {
+            display: none; /* Nascosto di default */
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            animation: fadeIn 0.5s;
+        }
+        .dew-inputs { display: flex; gap: 10px; justify-content: space-between; }
+        .input-group { flex: 1; }
+        .input-group label { display: block; font-size: 0.75rem; color: #aaa; margin-bottom: 5px; }
+        .input-group input { 
+            width: 100%; 
+            padding: 10px; 
+            background: #111; 
+            border: 1px solid #555; 
+            color: #fff; 
+            border-radius: 5px; 
+            font-size: 1rem; 
+            box-sizing: border-box; /* Importante per il padding */
+        }
+        .input-group input:focus { border-color: var(--iso-color); outline: none; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
         .dashboard { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 800px; }
         @media (min-width: 600px) { .dashboard { grid-template-columns: 1fr 1fr; } .full-width { grid-column: span 2; } }
         .card { background-color: var(--card-bg); border-radius: 12px; padding: 20px; border-left: 5px solid #555; box-shadow: 0 4px 6px rgba(0,0,0,0.2); position: relative; }
@@ -47,7 +74,21 @@
 
     <div class="controls">
         <select id="defectSelect" onchange="updateDashboard()">
-            </select>
+        </select>
+
+        <div id="dewCalc" class="dew-calculator">
+            <div style="font-size: 0.9rem; color: var(--iso-color); margin-bottom:10px; font-weight:bold;">🌡️ Calcolo Punto di Rugiada</div>
+            <div class="dew-inputs">
+                <div class="input-group">
+                    <label>Temp. Ambiente (°C)</label>
+                    <input type="number" id="inputTemp" placeholder="es. 20" oninput="calculateDewPoint()">
+                </div>
+                <div class="input-group">
+                    <label>Umidità Relativa (%)</label>
+                    <input type="number" id="inputHum" placeholder="es. 60" oninput="calculateDewPoint()">
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="dashboard">
@@ -95,13 +136,14 @@
                 targets: {
                     "ELEC_PANEL": { label: "QUADRO ELETTRICO", dist: "0.5m", subDist: "Macro", iso: "SOPRA la Media", isoVal: "Set > 50°C (Assoluto)", pal: "Fusion / Iron", note: "Nel quadro elettrico puoi usare un valore assoluto. Di norma nulla dovrebbe superare i 50-60°C. Imposta l'allarme rosso a 60°C." },
                     "WATER_LEAK": { label: "PERDITA ACQUA", dist: "1.0 - 1.5m", subDist: "Pavimento", iso: "SOTTO la Media", isoVal: "Colora il Freddo", pal: "Rain / HC Rainbow", note: "L'evaporazione raffredda la superficie. Imposta 'Isotherm Below' (Isoterma Sotto) per colorare di blu tutto ciò che è 2°C sotto la media del pavimento." },
-                    "THERMAL_BRIDGE": { label: "PONTI TERMICI / MUFFA", dist: "2.0 - 3.0m", subDist: "Pareti", iso: "SOTTO la Media", isoVal: "Set < (Dew Point)", pal: "Blue Isotherm", note: "Cerca il punto di rugiada (es. <14°C). Imposta l'isoterma per colorare tutto ciò che è sotto quella temperatura. Lì crescerà la muffa." },
+                    "THERMAL_BRIDGE": { label: "PONTI TERMICI / MUFFA", dist: "2.0 - 3.0m", subDist: "Pareti", iso: "SOTTO la Media", isoVal: "Set < (Dew Point)", pal: "Blue Isotherm", note: "Inserisci T. Ambiente e Umidità sopra per calcolare il target esatto. Tutto ciò che è sotto quella temperatura è a rischio condensa." },
                     "FLOOR_HEATING": { label: "RISCALDAMENTO PAVIM.", dist: "1.5m", subDist: "Inclinato", iso: "SOPRA la Media", isoVal: "Colora il Caldo", pal: "Ironbow", note: "Accendi il riscaldamento. Imposta l'isoterma per vedere solo i tubi (caldi). La perdita è una macchia che esce dal disegno dei tubi." }
                 }
             }
         };
 
         let currentMode = 'OUTDOOR'; 
+        
         function setMode(mode) {
             currentMode = mode;
             const body = document.body;
@@ -124,19 +166,68 @@
             updateDashboard();
         }
 
+        function calculateDewPoint() {
+            const T = parseFloat(document.getElementById('inputTemp').value);
+            const RH = parseFloat(document.getElementById('inputHum').value);
+            
+            // Se i dati non sono validi, non facciamo nulla o rimettiamo il default
+            if (isNaN(T) || isNaN(RH)) {
+                // Se manca un dato, rimettiamo il testo generico
+                document.getElementById('val-iso').innerText = "Inserisci Dati...";
+                return;
+            }
+
+            // FORMULA DI MAGNUS
+            // Costanti standard: a = 17.27, b = 237.7
+            const a = 17.27;
+            const b = 237.7;
+            
+            // Calcolo alpha
+            const alpha = ((a * T) / (b + T)) + Math.log(RH / 100.0);
+            
+            // Calcolo Dew Point
+            const dewPoint = (b * alpha) / (a - alpha);
+            
+            // Arrotondamento a 1 decimale
+            const dpFixed = dewPoint.toFixed(1);
+
+            // AGGIORNA LA UI
+            document.getElementById('val-iso').innerHTML = `Set < ${dpFixed}°C`;
+            document.getElementById('sub-iso').innerText = `Punto di Rugiada (Dew Point)`;
+        }
+
         function updateDashboard() {
             const select = document.getElementById('defectSelect');
             const key = select.value;
             const data = techData[currentMode].targets[key];
+            const calculatorDiv = document.getElementById('dewCalc');
+
+            // Logica per mostrare/nascondere il calcolatore
+            if (key === 'THERMAL_BRIDGE') {
+                calculatorDiv.style.display = 'block';
+                // Proviamo a calcolare subito se ci sono già numeri dentro
+                calculateDewPoint();
+                // Se i campi sono vuoti, usiamo il testo di default
+                const T = parseFloat(document.getElementById('inputTemp').value);
+                if(isNaN(T)) document.getElementById('val-iso').innerText = "Calcolo in attesa...";
+
+            } else {
+                calculatorDiv.style.display = 'none';
+                // Reset standard per le altre modalità
+                if (data) {
+                    document.getElementById('val-iso').innerText = data.isoVal;
+                    document.getElementById('sub-iso').innerText = "Modo: " + data.iso;
+                }
+            }
+
             if (data) {
                 document.getElementById('val-dist').innerText = data.dist;
                 document.getElementById('sub-dist').innerText = data.subDist;
-                document.getElementById('val-iso').innerText = data.isoVal;
-                document.getElementById('sub-iso').innerText = "Modo: " + data.iso;
                 document.getElementById('val-pal').innerText = data.pal;
                 document.getElementById('val-notes').innerText = data.note;
             }
         }
+        
         setMode('OUTDOOR');
     </script>
 </body>
