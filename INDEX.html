@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mainetti Vision: TECH</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <link rel="icon" type="image/png" href="icon.png">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <style>
+        :root { --bg-color: #1a1a1a; --card-bg: #252525; --text-main: #f0f0f0; --drone-color: #00e5ff; --flir-color: #ffca28; --alert-color: #ff5252; --iso-color: #d500f9; }
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { margin-bottom: 5px; font-size: 1.6rem; text-transform: uppercase; letter-spacing: 2px; }
+        .brand-sub { font-size: 0.8rem; color: #888; margin-bottom: 25px; letter-spacing: 1px; }
+        .mode-switch { display: flex; background: #333; border-radius: 30px; padding: 5px; margin-bottom: 30px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .mode-btn { padding: 10px 25px; border-radius: 25px; border: none; cursor: pointer; font-weight: bold; font-size: 1rem; transition: all 0.3s; background: transparent; color: #888; }
+        .mode-btn.active.drone { background-color: var(--drone-color); color: #000; box-shadow: 0 0 15px rgba(0, 229, 255, 0.4); }
+        .mode-btn.active.flir { background-color: var(--flir-color); color: #000; box-shadow: 0 0 15px rgba(255, 202, 40, 0.4); }
+        .controls { width: 100%; max-width: 500px; margin-bottom: 20px; }
+        select { width: 100%; padding: 15px; background-color: #333; color: white; border: 2px solid #444; border-radius: 8px; font-size: 1.1rem; outline: none; cursor: pointer; }
+        body.mode-drone select:focus { border-color: var(--drone-color); } body.mode-flir select:focus { border-color: var(--flir-color); }
+        .dashboard { display: grid; grid-template-columns: 1fr; gap: 15px; width: 100%; max-width: 800px; }
+        @media (min-width: 600px) { .dashboard { grid-template-columns: 1fr 1fr; } .full-width { grid-column: span 2; } }
+        .card { background-color: var(--card-bg); border-radius: 12px; padding: 20px; border-left: 5px solid #555; box-shadow: 0 4px 6px rgba(0,0,0,0.2); position: relative; }
+        .card-label { font-size: 0.85rem; color: #aaa; text-transform: uppercase; margin-bottom: 5px; display: block; }
+        .card-value { font-size: 1.3rem; font-weight: bold; }
+        .card-sub { font-size: 0.9rem; color: #bbb; margin-top: 5px; }
+        .card.dist { border-color: #448aff; } .card.iso { border-color: var(--iso-color); background: #2a1a2e; } .card.palette { border-color: #b388ff; } .card.notes { border-color: #69f0ae; }
+        .highlight-iso { color: var(--iso-color); }
+        .icon { float: right; opacity: 0.3; font-size: 1.5rem; }
+    </style>
+</head>
+<body class="mode-drone">
+
+    <h1>Mainetti Vision: TECH</h1>
+    <div class="brand-sub">powered by Mainetti Solution</div>
+
+    <div class="mode-switch">
+        <button class="mode-btn active drone" onclick="setMode('OUTDOOR')">✈️ OUTDOOR (Drone)</button>
+        <button class="mode-btn flir" onclick="setMode('INDOOR')">🏠 INDOOR (FLIR)</button>
+    </div>
+
+    <div class="controls">
+        <select id="defectSelect" onchange="updateDashboard()">
+            </select>
+    </div>
+
+    <div class="dashboard">
+        <div class="card dist">
+            <span class="card-label" id="label-dist">Altezza Volo</span>
+            <div class="icon">📏</div>
+            <div class="card-value" id="val-dist">--</div>
+            <div class="card-sub" id="sub-dist">--</div>
+        </div>
+        <div class="card iso">
+            <span class="card-label">Isoterma / Allarme</span>
+            <div class="icon">🔔</div>
+            <div class="card-value highlight-iso" id="val-iso">--</div>
+            <div class="card-sub" id="sub-iso">--</div>
+        </div>
+        <div class="card palette">
+            <span class="card-label">Palette Consigliata</span>
+            <div class="icon">🎨</div>
+            <div class="card-value" id="val-pal">--</div>
+            <div class="card-sub">--</div>
+        </div>
+        <div class="card notes full-width">
+            <span class="card-label">Note Tattiche</span>
+            <div class="icon">📝</div>
+            <div class="card-value" style="font-size: 1.1rem; line-height: 1.4;" id="val-notes">--</div>
+        </div>
+    </div>
+
+    <script>
+        const techData = {
+            "OUTDOOR": {
+                name: "DRONE (Ottica 9.1mm)",
+                distLabel: "Altezza Volo (AGL)",
+                targets: {
+                    "PV_HOTSPOT": { label: "FOTOVOLTAICO - Hotspot", dist: "20 - 25m", subDist: "Nadir (90°)", iso: "SOPRA la Media", isoVal: "Set > (Media + 10°C)", pal: "Ironbow / Red Hot", note: "Usa la funzione 'Isotherm Above'. Punta il drone su pannelli sani, leggi la temperatura media (es. 40°), imposta l'isoterma a 50°. I difetti diventeranno rossi." },
+                    "PV_STRING": { label: "FOTOVOLTAICO - Stringa OFF", dist: "30 - 40m", subDist: "Volo Veloce", iso: "SOPRA la Media", isoVal: "Set > (Media + 5°C)", pal: "Ironbow", note: "La stringa disconnessa è più calda (non produce energia). Vedrai intere righe colorate diversamente." },
+                    "ROOF_LEAK": { label: "TETTO - Infiltrazioni", dist: "30 - 40m", subDist: "Dopo tramonto", iso: "SOPRA la Media", isoVal: "Colora il Caldo", pal: "Arctic / Blue-Red", note: "Di notte, il tetto si raffredda ma l'acqua sotto la guaina resta CALDA. Imposta l'isoterma per evidenziare le zone più calde della media del tetto." },
+                    "FACADE": { label: "FACCIATA - Distacco", dist: "15 - 20m", subDist: "Sera/Notte", iso: "SOTTO la Media", isoVal: "Colora il Freddo", pal: "HC Rainbow", note: "Il distacco si raffredda PRIMA del muro pieno. Cerca macchie più fredde (blu/nere) sulla facciata." },
+                    "POWER_LINE": { label: "ELETTRICA - Isolatori", dist: "10 - 15m", subDist: "Cielo coperto", iso: "SOPRA la Media", isoVal: "Set > (Ambiente + 10°C)", pal: "White Hot", note: "Tutto deve essere grigio. Se un punto supera la temperatura ambiente di molto, deve diventare Bianco/Rosso." }
+                }
+            },
+            "INDOOR": {
+                name: "FLIR ONE PRO",
+                distLabel: "Distanza Target",
+                targets: {
+                    "ELEC_PANEL": { label: "QUADRO ELETTRICO", dist: "0.5m", subDist: "Macro", iso: "SOPRA la Media", isoVal: "Set > 50°C (Assoluto)", pal: "Fusion / Iron", note: "Nel quadro elettrico puoi usare un valore assoluto. Di norma nulla dovrebbe superare i 50-60°C. Imposta l'allarme rosso a 60°C." },
+                    "WATER_LEAK": { label: "PERDITA ACQUA", dist: "1.0 - 1.5m", subDist: "Pavimento", iso: "SOTTO la Media", isoVal: "Colora il Freddo", pal: "Rain / HC Rainbow", note: "L'evaporazione raffredda la superficie. Imposta 'Isotherm Below' (Isoterma Sotto) per colorare di blu tutto ciò che è 2°C sotto la media del pavimento." },
+                    "THERMAL_BRIDGE": { label: "PONTI TERMICI / MUFFA", dist: "2.0 - 3.0m", subDist: "Pareti", iso: "SOTTO la Media", isoVal: "Set < (Dew Point)", pal: "Blue Isotherm", note: "Cerca il punto di rugiada (es. <14°C). Imposta l'isoterma per colorare tutto ciò che è sotto quella temperatura. Lì crescerà la muffa." },
+                    "FLOOR_HEATING": { label: "RISCALDAMENTO PAVIM.", dist: "1.5m", subDist: "Inclinato", iso: "SOPRA la Media", isoVal: "Colora il Caldo", pal: "Ironbow", note: "Accendi il riscaldamento. Imposta l'isoterma per vedere solo i tubi (caldi). La perdita è una macchia che esce dal disegno dei tubi." }
+                }
+            }
+        };
+
+        let currentMode = 'OUTDOOR'; 
+        function setMode(mode) {
+            currentMode = mode;
+            const body = document.body;
+            const btnDrone = document.querySelector('.mode-btn.drone');
+            const btnFlir = document.querySelector('.mode-btn.flir');
+            if (mode === 'OUTDOOR') { body.className = 'mode-drone'; btnDrone.classList.add('active'); btnFlir.classList.remove('active'); } 
+            else { body.className = 'mode-flir'; btnFlir.classList.add('active'); btnDrone.classList.remove('active'); }
+            
+            document.getElementById('label-dist').innerText = techData[mode].distLabel;
+
+            const select = document.getElementById('defectSelect');
+            select.innerHTML = ''; 
+            const targets = techData[mode].targets;
+            for (const key in targets) {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = targets[key].label;
+                select.appendChild(opt);
+            }
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            const select = document.getElementById('defectSelect');
+            const key = select.value;
+            const data = techData[currentMode].targets[key];
+            if (data) {
+                document.getElementById('val-dist').innerText = data.dist;
+                document.getElementById('sub-dist').innerText = data.subDist;
+                document.getElementById('val-iso').innerText = data.isoVal;
+                document.getElementById('sub-iso').innerText = "Modo: " + data.iso;
+                document.getElementById('val-pal').innerText = data.pal;
+                document.getElementById('val-notes').innerText = data.note;
+            }
+        }
+        setMode('OUTDOOR');
+    </script>
+</body>
+</html>
